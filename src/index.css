@@ -130,6 +130,15 @@
     @apply bg-background text-foreground;
   }
 
+  /* Fix sidebar layout for Tailwind v4 */
+  .group.peer[data-side="left"][data-state="expanded"] > div:first-child {
+    width: var(--sidebar-width, 16rem);
+  }
+
+  .group.peer[data-side="left"][data-state="collapsed"] > div:first-child {
+    width: 0px;
+  }
+
   /* Global Scrollbar Styling */
   * {
     scrollbar-width: thin;

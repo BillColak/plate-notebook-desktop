@@ -137,8 +137,8 @@ export default function App() {
     <Providers>
       <SidebarProvider>
         {!focusMode && <SidebarLeft onNavigate={handleNavigate} />}
-        <SidebarInset>
-          <div className={`flex h-screen flex-col ${focusMode ? "focus-mode-editor" : ""}`}>
+        <SidebarInset className="overflow-hidden">
+          <div className={`flex h-screen flex-col overflow-hidden ${focusMode ? "focus-mode-editor" : ""}`}>
             {!focusMode && view === "editor" && (
               <BreadcrumbNav
                 noteId={activeNoteId}
