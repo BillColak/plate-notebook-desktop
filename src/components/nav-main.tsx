@@ -1,4 +1,3 @@
-
 import type { LucideIcon } from "lucide-react";
 
 import {
@@ -7,42 +6,31 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 
+interface NavItem {
+  title: string;
+  url: string;
+  icon: LucideIcon;
+  isActive?: boolean;
+}
+
 export function NavMain({
   items,
+  onItemClick,
 }: {
-  items: {
-    title: string;
-    url: string;
-    icon: LucideIcon;
-    isActive?: boolean;
-  }[];
+  items: NavItem[];
+  onItemClick?: (item: NavItem) => void;
 }) {
-  const handleClick = (item: { title: string; url: string }) => {
-    if (item.url === "#search") {
-      // Dispatch a custom event to open the search dialog
-      window.dispatchEvent(new CustomEvent("open-search"));
-      return;
-    }
-  };
-
   return (
     <SidebarMenu>
       {items.map((item) => (
         <SidebarMenuItem key={item.title}>
-          {item.url.startsWith("#") ? (
-            <SidebarMenuButton
-              isActive={item.isActive}
-              onClick={() => handleClick(item)}
-            >
-              <item.icon />
-              <span>{item.title}</span>
-            </SidebarMenuButton>
-          ) : (
-            <SidebarMenuButton isActive={item.isActive}>
-              <item.icon />
-              <span>{item.title}</span>
-            </SidebarMenuButton>
-          )}
+          <SidebarMenuButton
+            isActive={item.isActive}
+            onClick={() => onItemClick?.(item)}
+          >
+            <item.icon />
+            <span>{item.title}</span>
+          </SidebarMenuButton>
         </SidebarMenuItem>
       ))}
     </SidebarMenu>

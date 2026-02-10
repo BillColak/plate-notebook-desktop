@@ -1,36 +1,51 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect } from "react";
 
 import { getFavoriteNotes } from "@/actions/folders";
 import { getNotesTree } from "@/actions/notes";
 import { SidebarLeftClient } from "@/components/sidebar-left-client";
-import { type TreeNode, buildTree } from "@/lib/tree";
+import { buildTree } from "@/lib/tree";
+import {
+  useAppStore,
+  setTree,
+  setFavorites,
+} from "@/lib/store";
 
-export function SidebarLeft() {
-  const [tree, setTree] = useState<TreeNode[]>([]);
-  const [favorites, setFavorites] = useState<
-    { name: string; url: string; emoji: string }[]
-  >([]);
+export function SidebarLeft({
+  onNavigate,
+}: {
+  onNavigate: (noteId: string) => void;
+}) {
+  const { sidebarRefreshKey, tree, favorites } = useAppStore();
 
-  useEffect(() => {
-    async function load() {
-      try {
-        const allNotes = await getNotesTree();
-        setTree(buildTree(allNotes));
+  const load = useCallback(async () => {
+    try {
+      const allNotes = await getNotesTree();
+      setTree(allNotes);
 
-        const favoriteNotes = await getFavoriteNotes();
-        setFavorites(
-          favoriteNotes.map((n) => ({
-            name: n.title,
-            url: `/notes/${n.id}`,
-            emoji: n.emoji ?? "📝",
-          }))
-        );
-      } catch {
-        // DB not ready yet during dev
-      }
+      const favoriteNotes = await getFavoriteNotes();
+      setFavorites(
+        favoriteNotes.map((n) => ({
+          name: n.title,
+          url: `/notes/${n.id}`,
+          emoji: n.emoji ?? "📝",
+        }))
+      );
+    } catch {
+      // DB not ready yet during dev
     }
-    load();
   }, []);
 
-  return <SidebarLeftClient favorites={favorites} tree={tree} />;
+  useEffect(() => {
+    load();
+  }, [load, sidebarRefreshKey]);
+
+  const treeNodes = buildTree(tree);
+
+  return (
+    <SidebarLeftClient
+      favorites={favorites}
+      tree={treeNodes}
+      onNavigate={onNavigate}
+    />
+  );
 }

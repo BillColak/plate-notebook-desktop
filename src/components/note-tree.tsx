@@ -1,4 +1,3 @@
-
 import { ChevronRight, Plus } from "lucide-react";
 
 import { createNote } from "@/actions/notes";
@@ -19,6 +18,7 @@ import {
   SidebarMenuSub,
 } from "@/components/ui/sidebar";
 import type { TreeNode } from "@/lib/tree";
+import { refreshSidebar } from "@/lib/store";
 
 function TreeNodeComponent({
   node,
@@ -33,7 +33,7 @@ function TreeNodeComponent({
     return (
       <Collapsible>
         <SidebarMenuItem>
-          <NoteTreeItem isActive={false} node={node}>
+          <NoteTreeItem isActive={false} node={node} onRefresh={refreshSidebar}>
             <SidebarMenuButton>
               <span>{node.emoji}</span>
               <span className="truncate">{node.title}</span>
@@ -51,6 +51,7 @@ function TreeNodeComponent({
             onClick={async () => {
               const id = await createNote(node.id);
               onNavigate?.(id);
+              refreshSidebar();
             }}
             showOnHover
           >
@@ -77,11 +78,12 @@ function TreeNodeComponent({
 
   return (
     <SidebarMenuItem>
-      <NoteTreeItem isActive={isActive} node={node}>
+      <NoteTreeItem isActive={isActive} node={node} onRefresh={refreshSidebar}>
         <SidebarMenuButton
           isActive={isActive}
           onClick={() => onNavigate?.(node.id)}
         >
+          {node.isPinned && <span className="text-xs">📌</span>}
           <span>{node.emoji}</span>
           <span className="truncate">{node.title}</span>
         </SidebarMenuButton>
@@ -99,7 +101,6 @@ export function NoteTree({
   activeNoteId?: string | null;
   onNavigate?: (noteId: string) => void;
 }) {
-
   return (
     <SidebarGroup>
       <SidebarGroupLabel>Notes</SidebarGroupLabel>

@@ -6,7 +6,6 @@ interface PlateNode {
 
 /**
  * Recursively extract all text from a Plate.js document tree.
- * Walks every node, collecting leaf text content.
  */
 export function extractPlainText(nodes: unknown[]): string {
   const parts: string[] = [];
@@ -27,7 +26,6 @@ export function extractPlainText(nodes: unknown[]): string {
       }
     }
 
-    // Add newlines after block elements
     if (
       node.type &&
       typeof node.type === "string" &&
@@ -45,7 +43,6 @@ export function extractPlainText(nodes: unknown[]): string {
 
 /**
  * Extract the note title from the first H1 element.
- * Falls back to "Untitled" if no H1 is found.
  */
 export function extractTitle(nodes: unknown[]): string {
   if (!Array.isArray(nodes)) {
@@ -81,7 +78,6 @@ export function extractTitle(nodes: unknown[]): string {
 
 /**
  * Extract #tags from plain text content.
- * Matches #word patterns, returns lowercase unique set.
  */
 const TAG_REGEX = /(?:^|\s)#([a-zA-Z][\w-]{0,49})\b/g;
 
@@ -91,15 +87,34 @@ export function extractInlineTags(text: string): string[] {
 
   while (match !== null) {
     const captured = match[1];
-
     if (captured) {
       found.add(captured.toLowerCase());
     }
     match = TAG_REGEX.exec(text);
   }
 
-  // Reset lastIndex for reuse
   TAG_REGEX.lastIndex = 0;
+  return Array.from(found);
+}
 
+/**
+ * Extract [[wikilinks]] from plain text content.
+ * Returns an array of note titles referenced by wikilinks.
+ */
+const WIKILINK_REGEX = /\[\[([^\]]+)\]\]/g;
+
+export function extractWikilinks(text: string): string[] {
+  const found = new Set<string>();
+  let match: RegExpExecArray | null = WIKILINK_REGEX.exec(text);
+
+  while (match !== null) {
+    const captured = match[1];
+    if (captured?.trim()) {
+      found.add(captured.trim());
+    }
+    match = WIKILINK_REGEX.exec(text);
+  }
+
+  WIKILINK_REGEX.lastIndex = 0;
   return Array.from(found);
 }

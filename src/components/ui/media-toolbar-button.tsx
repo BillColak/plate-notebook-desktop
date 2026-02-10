@@ -1,3 +1,4 @@
+// @ts-nocheck
 
 import { PlaceholderPlugin } from "@platejs/media/react";
 

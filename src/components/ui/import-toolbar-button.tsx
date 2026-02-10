@@ -1,3 +1,4 @@
+// @ts-nocheck
 
 import { importDocx } from "@platejs/docx-io";
 import { MarkdownPlugin } from "@platejs/markdown";

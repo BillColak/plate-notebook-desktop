@@ -1,11 +1,19 @@
 import type { TElement } from "platejs";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
+import { getNote, getMostRecentNote } from "@/actions/notes";
+import { GraphView } from "@/components/graph-view";
+import { KeyboardShortcutsDialog } from "@/components/keyboard-shortcuts-dialog";
 import { PlateEditor } from "@/components/plate-editor";
 import { Providers } from "@/components/providers";
 import { SearchDialog } from "@/components/search-dialog";
 import { SidebarLeft } from "@/components/sidebar-left";
+import { SidebarRight } from "@/components/sidebar-right";
+import { StatusBar } from "@/components/status-bar";
+import { TrashView } from "@/components/trash-view";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
+import type { Note } from "@/db/schema";
+import { useAppStore, setActiveNote, setView } from "@/lib/store";
 
 const defaultValue: TElement[] = [
   {
@@ -23,30 +31,93 @@ const defaultValue: TElement[] = [
 ];
 
 export default function App() {
-  const [activeNoteId] = useState<string | null>(null);
+  const { activeNoteId, view } = useAppStore();
+  const [noteData, setNoteData] = useState<Note | null>(null);
+  const [editorValue, setEditorValue] = useState<TElement[]>(defaultValue);
+  const [wordCount, setWordCount] = useState(0);
+  const [charCount, setCharCount] = useState(0);
+
+  // Load initial note
+  useEffect(() => {
+    getMostRecentNote().then((note) => {
+      if (note) {
+        setActiveNote(note.id);
+      }
+    });
+  }, []);
+
+  // Load note data when active note changes
+  useEffect(() => {
+    if (!activeNoteId) {
+      setNoteData(null);
+      setEditorValue(defaultValue);
+      return;
+    }
+
+    getNote(activeNoteId).then((note) => {
+      if (note) {
+        setNoteData(note);
+        try {
+          const parsed = JSON.parse(note.content ?? "[]");
+          setEditorValue(
+            Array.isArray(parsed) && parsed.length > 0 ? parsed : defaultValue
+          );
+        } catch {
+          setEditorValue(defaultValue);
+        }
+        setWordCount(note.wordCount ?? 0);
+      }
+    });
+  }, [activeNoteId]);
+
+  const handleNavigate = useCallback((noteId: string) => {
+    setActiveNote(noteId);
+    setView("editor");
+  }, []);
+
+  const handleWordCountChange = useCallback(
+    (words: number, chars: number) => {
+      setWordCount(words);
+      setCharCount(chars);
+    },
+    []
+  );
 
   return (
     <Providers>
       <SidebarProvider>
-        <SidebarLeft />
+        <SidebarLeft onNavigate={handleNavigate} />
         <SidebarInset>
-          <div className="flex flex-1 flex-col">
+          <div className="flex h-screen flex-col">
             <div className="flex-1 overflow-auto">
-              {activeNoteId ? (
+              {view === "trash" && <TrashView />}
+              {view === "graph" && <GraphView onNavigate={handleNavigate} />}
+              {view === "editor" && (
                 <PlateEditor
-                  initialValue={defaultValue}
-                  noteId={activeNoteId}
-                />
-              ) : (
-                <PlateEditor
-                  initialValue={defaultValue}
-                  noteId="scratch"
+                  key={activeNoteId ?? "scratch"}
+                  initialValue={editorValue}
+                  noteId={activeNoteId ?? "scratch"}
+                  onNavigate={handleNavigate}
+                  onWordCountChange={handleWordCountChange}
                 />
               )}
             </div>
+            <StatusBar wordCount={wordCount} charCount={charCount} />
           </div>
         </SidebarInset>
-        <SearchDialog />
+        <SidebarRight
+          noteId={activeNoteId ?? undefined}
+          createdAt={
+            noteData?.createdAt ? new Date(noteData.createdAt * 1000) : null
+          }
+          updatedAt={
+            noteData?.updatedAt ? new Date(noteData.updatedAt * 1000) : null
+          }
+          wordCount={wordCount}
+          onNavigate={handleNavigate}
+        />
+        <SearchDialog onNavigate={handleNavigate} />
+        <KeyboardShortcutsDialog />
       </SidebarProvider>
     </Providers>
   );

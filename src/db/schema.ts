@@ -1,81 +1,99 @@
-import { sql } from "drizzle-orm";
-import {
-  index,
-  integer,
-  sqliteTable,
-  text,
-  uniqueIndex,
-} from "drizzle-orm/sqlite-core";
+// Type definitions matching the Rust backend structs
 
-// ─── Notes ───────────────────────────────────────────────
+export interface Note {
+  id: string;
+  title: string;
+  content?: string | null;
+  plainText?: string | null;
+  emoji?: string | null;
+  parentId?: string | null;
+  isFolder?: boolean;
+  isFavorite?: boolean;
+  isPinned?: boolean;
+  isTrashed?: boolean;
+  sortOrder?: number;
+  createdAt?: number | null;
+  updatedAt?: number | null;
+  trashedAt?: number | null;
+  wordCount?: number;
+}
 
-export const notes = sqliteTable(
-  "notes",
-  {
-    id: text("id").primaryKey(),
-    title: text("title").notNull().default("Untitled"),
-    content: text("content", { mode: "json" }),
-    plainText: text("plain_text").default(""),
-    emoji: text("emoji").default("📝"),
-    parentId: text("parent_id"),
-    isFolder: integer("is_folder", { mode: "boolean" }).default(false),
-    isFavorite: integer("is_favorite", { mode: "boolean" }).default(false),
-    isTrashed: integer("is_trashed", { mode: "boolean" }).default(false),
-    sortOrder: integer("sort_order").default(0),
-    createdAt: integer("created_at", { mode: "timestamp" }).default(
-      sql`(unixepoch())`
-    ),
-    updatedAt: integer("updated_at", { mode: "timestamp" }).default(
-      sql`(unixepoch())`
-    ),
-    trashedAt: integer("trashed_at", { mode: "timestamp" }),
-    wordCount: integer("word_count").default(0),
-  },
-  (table) => [
-    index("idx_notes_parent").on(table.parentId),
-    index("idx_notes_favorite").on(table.isFavorite),
-    index("idx_notes_trashed").on(table.isTrashed),
-    index("idx_notes_updated").on(table.updatedAt),
-  ]
-);
+export interface NoteTreeItem {
+  id: string;
+  title: string;
+  parentId: string | null;
+  emoji: string | null;
+  isFolder: boolean;
+  position: number;
+  isFavorite: boolean;
+  isPinned: boolean;
+}
 
-// ─── Tags ────────────────────────────────────────────────
+export interface SearchResult {
+  id: string;
+  noteId: string;
+  title: string;
+  snippet: string;
+}
 
-export const tags = sqliteTable(
-  "tags",
-  {
-    id: text("id").primaryKey(),
-    name: text("name").notNull(),
-    color: text("color").default("#6366f1"),
-    createdAt: integer("created_at", { mode: "timestamp" }).default(
-      sql`(unixepoch())`
-    ),
-  },
-  (table) => [uniqueIndex("idx_tags_name").on(table.name)]
-);
+export interface TagInfo {
+  id: string;
+  name: string;
+  color: string | null;
+  noteCount: number;
+}
 
-// ─── Note ↔ Tag Junction ────────────────────────────────
+export interface NoteTagInfo {
+  tagId: string;
+  tagName: string;
+  tagColor: string | null;
+  source: string;
+}
 
-export const noteTags = sqliteTable(
-  "note_tags",
-  {
-    noteId: text("note_id")
-      .notNull()
-      .references(() => notes.id, { onDelete: "cascade" }),
-    tagId: text("tag_id")
-      .notNull()
-      .references(() => tags.id, { onDelete: "cascade" }),
-    source: text("source", { enum: ["inline", "manual"] }).default("inline"),
-  },
-  (table) => [
-    uniqueIndex("idx_note_tags_unique").on(table.noteId, table.tagId),
-    index("idx_note_tags_tag").on(table.tagId),
-  ]
-);
+export interface TrashedNote {
+  id: string;
+  title: string;
+  emoji: string | null;
+  trashedAt: number | null;
+}
 
-// ─── Types ───────────────────────────────────────────────
+export interface BacklinkItem {
+  id: string;
+  title: string;
+  emoji: string | null;
+}
 
-export type Note = typeof notes.$inferSelect;
-export type NewNote = typeof notes.$inferInsert;
-export type Tag = typeof tags.$inferSelect;
-export type NoteTag = typeof noteTags.$inferSelect;
+export interface GraphNode {
+  id: string;
+  title: string;
+  emoji: string | null;
+}
+
+export interface GraphEdge {
+  source: string;
+  target: string;
+  edgeType: string;
+}
+
+export interface GraphData {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+}
+
+export interface NoteTitleItem {
+  id: string;
+  title: string;
+}
+
+export interface RecentNote {
+  id: string;
+  title: string;
+  emoji: string | null;
+  updatedAt: string | null;
+}
+
+export interface FavoriteNote {
+  id: string;
+  title: string;
+  emoji: string | null;
+}

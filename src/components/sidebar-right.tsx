@@ -1,4 +1,6 @@
-import { NavUser } from "@/components/nav-user";
+import { Moon, Sun } from "lucide-react";
+
+import { BacklinksPanel } from "@/components/backlinks-panel";
 import { NoteMetadata } from "@/components/note-metadata";
 import { TagPanel } from "@/components/tag-panel";
 import {
@@ -7,38 +9,51 @@ import {
   SidebarHeader,
   SidebarSeparator,
 } from "@/components/ui/sidebar";
-
-const userData = {
-  name: "User",
-  email: "user@notebook.local",
-  avatar: "",
-};
+import { useAppStore, toggleTheme } from "@/lib/store";
 
 export function SidebarRight({
   noteId,
   createdAt,
   updatedAt,
   wordCount,
+  onNavigate,
   ...props
 }: React.ComponentProps<typeof Sidebar> & {
   noteId?: string;
   createdAt?: Date | null;
   updatedAt?: Date | null;
   wordCount?: number;
+  onNavigate?: (noteId: string) => void;
 }) {
+  const { theme } = useAppStore();
+
   return (
     <Sidebar
       className="sticky top-0 hidden h-svh border-l lg:flex"
       collapsible="none"
       {...props}
     >
-      <SidebarHeader className="h-16 border-sidebar-border border-b">
-        <NavUser user={userData} />
+      <SidebarHeader className="flex h-12 flex-row items-center justify-between border-sidebar-border border-b px-4">
+        <span className="font-medium text-sm">Details</span>
+        <button
+          type="button"
+          className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+          onClick={toggleTheme}
+          title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+        >
+          {theme === "dark" ? (
+            <Sun className="h-4 w-4" />
+          ) : (
+            <Moon className="h-4 w-4" />
+          )}
+        </button>
       </SidebarHeader>
       <SidebarContent>
         {noteId && (
           <>
             <TagPanel noteId={noteId} />
+            <SidebarSeparator className="mx-0" />
+            <BacklinksPanel noteId={noteId} onNavigate={onNavigate} />
             <SidebarSeparator className="mx-0" />
             <NoteMetadata
               createdAt={createdAt ?? null}

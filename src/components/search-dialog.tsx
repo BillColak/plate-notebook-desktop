@@ -1,9 +1,8 @@
-
 import { FileText } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 import { getRecentNotes } from "@/actions/notes";
-import { type SearchResult, searchNotes } from "@/actions/search";
+import { searchNotes } from "@/actions/search";
 import {
   CommandDialog,
   CommandEmpty,
@@ -12,16 +11,14 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
+import type { RecentNote, SearchResult } from "@/db/schema";
 import { useDebounce } from "@/hooks/use-debounce";
 
-interface RecentNote {
-  id: string;
-  title: string;
-  emoji: string | null;
-  updatedAt: Date | null;
-}
-
-export function SearchDialog() {
+export function SearchDialog({
+  onNavigate,
+}: {
+  onNavigate?: (noteId: string) => void;
+}) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -38,7 +35,6 @@ export function SearchDialog() {
     };
 
     document.addEventListener("keydown", down);
-
     return () => document.removeEventListener("keydown", down);
   }, []);
 
@@ -46,7 +42,6 @@ export function SearchDialog() {
   useEffect(() => {
     const handler = () => setOpen(true);
     window.addEventListener("open-search", handler);
-
     return () => window.removeEventListener("open-search", handler);
   }, []);
 
@@ -63,17 +58,16 @@ export function SearchDialog() {
       setResults([]);
       return;
     }
-
     searchNotes(debouncedQuery).then(setResults);
   }, [debouncedQuery]);
 
   const handleSelect = useCallback(
-    (_noteId: string) => {
+    (noteId: string) => {
       setOpen(false);
       setQuery("");
-      // TODO: wire up navigation
+      onNavigate?.(noteId);
     },
-    []
+    [onNavigate]
   );
 
   const showResults = debouncedQuery.trim().length > 0;

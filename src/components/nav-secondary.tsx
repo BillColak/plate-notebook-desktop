@@ -9,16 +9,21 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 
+interface NavItem {
+  title: string;
+  url: string;
+  icon: LucideIcon;
+  badge?: React.ReactNode;
+  isActive?: boolean;
+}
+
 export function NavSecondary({
   items,
+  onItemClick,
   ...props
 }: {
-  items: {
-    title: string;
-    url: string;
-    icon: LucideIcon;
-    badge?: React.ReactNode;
-  }[];
+  items: NavItem[];
+  onItemClick?: (item: NavItem) => void;
 } & React.ComponentPropsWithoutRef<typeof SidebarGroup>) {
   return (
     <SidebarGroup {...props}>
@@ -26,7 +31,10 @@ export function NavSecondary({
         <SidebarMenu>
           {items.map((item) => (
             <SidebarMenuItem key={item.title}>
-              <SidebarMenuButton>
+              <SidebarMenuButton
+                isActive={item.isActive}
+                onClick={() => onItemClick?.(item)}
+              >
                 <item.icon />
                 <span>{item.title}</span>
               </SidebarMenuButton>

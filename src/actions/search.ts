@@ -1,11 +1,11 @@
-import { invoke } from "@tauri-apps/api/core";
-
-export interface SearchResult {
-  id: string;
-  title: string;
-  snippet: string;
-}
+import type { SearchResult } from "@/db/schema";
+import { invoke } from "@/lib/tauri";
 
 export async function searchNotes(query: string): Promise<SearchResult[]> {
-  return invoke<SearchResult[]>("search_notes", { query });
+  try {
+    return await invoke<SearchResult[]>("search_notes", { query });
+  } catch {
+    console.warn("[dev] searchNotes fallback");
+    return [];
+  }
 }

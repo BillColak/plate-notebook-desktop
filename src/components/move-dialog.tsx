@@ -1,4 +1,3 @@
-
 import { Folder } from "lucide-react";
 import { useEffect, useState, useTransition } from "react";
 
@@ -11,20 +10,22 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import type { Note } from "@/db/schema";
+import type { NoteTreeItem } from "@/db/schema";
 
 export function MoveDialog({
   noteId,
   noteTitle,
   open,
   onOpenChange,
+  onSuccess,
 }: {
   noteId: string;
   noteTitle: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onSuccess?: () => void;
 }) {
-  const [folders, setFolders] = useState<Note[]>([]);
+  const [folders, setFolders] = useState<NoteTreeItem[]>([]);
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
@@ -39,6 +40,7 @@ export function MoveDialog({
     startTransition(async () => {
       await moveNote(noteId, parentId);
       onOpenChange(false);
+      onSuccess?.();
     });
   };
 

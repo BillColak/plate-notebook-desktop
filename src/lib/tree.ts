@@ -1,4 +1,4 @@
-import type { Note } from "@/db/schema";
+import type { NoteTreeItem } from "@/db/schema";
 
 export interface TreeNode {
   id: string;
@@ -6,10 +6,11 @@ export interface TreeNode {
   emoji: string;
   isFolder: boolean;
   isFavorite: boolean;
+  isPinned: boolean;
   children: TreeNode[];
 }
 
-export function buildTree(notes: Note[]): TreeNode[] {
+export function buildTree(notes: NoteTreeItem[]): TreeNode[] {
   const map = new Map<string, TreeNode>();
   const roots: TreeNode[] = [];
 
@@ -21,6 +22,7 @@ export function buildTree(notes: Note[]): TreeNode[] {
       emoji: note.emoji ?? "📝",
       isFolder: note.isFolder ?? false,
       isFavorite: note.isFavorite ?? false,
+      isPinned: note.isPinned ?? false,
       children: [],
     });
   }
@@ -40,13 +42,15 @@ export function buildTree(notes: Note[]): TreeNode[] {
     }
   }
 
-  // Sort: folders first, then alphabetically
+  // Sort: pinned first, then folders, then alphabetically
   const sortNodes = (nodes: TreeNode[]) => {
     nodes.sort((a, b) => {
+      if (a.isPinned !== b.isPinned) {
+        return a.isPinned ? -1 : 1;
+      }
       if (a.isFolder !== b.isFolder) {
         return a.isFolder ? -1 : 1;
       }
-
       return a.title.localeCompare(b.title);
     });
 

@@ -1,4 +1,3 @@
-
 import { MoreHorizontal, StarOff, Trash2 } from "lucide-react";
 
 import { toggleFavorite } from "@/actions/folders";
@@ -19,19 +18,21 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { refreshSidebar } from "@/lib/store";
 
 export function NavFavorites({
   favorites,
+  onNavigate,
 }: {
   favorites: {
     name: string;
     url: string;
     emoji: string;
   }[];
+  onNavigate?: (noteId: string) => void;
 }) {
   const { isMobile } = useSidebar();
 
-  // Extract noteId from URL for actions
   const getNoteId = (url: string) => {
     return url.split("/").at(-1) ?? "";
   };
@@ -42,7 +43,10 @@ export function NavFavorites({
       <SidebarMenu>
         {favorites.map((item) => (
           <SidebarMenuItem key={item.url}>
-            <SidebarMenuButton title={item.name}>
+            <SidebarMenuButton
+              title={item.name}
+              onClick={() => onNavigate?.(getNoteId(item.url))}
+            >
               <span>{item.emoji}</span>
               <span>{item.name}</span>
             </SidebarMenuButton>
@@ -61,6 +65,7 @@ export function NavFavorites({
                 <DropdownMenuItem
                   onClick={async () => {
                     await toggleFavorite(getNoteId(item.url));
+                    refreshSidebar();
                   }}
                 >
                   <StarOff className="text-muted-foreground" />
@@ -71,6 +76,7 @@ export function NavFavorites({
                   className="text-destructive focus:text-destructive"
                   onClick={async () => {
                     await deleteNote(getNoteId(item.url));
+                    refreshSidebar();
                   }}
                 >
                   <Trash2 className="text-muted-foreground" />

@@ -1,7 +1,7 @@
-
-import { FolderInput, Pencil, Star, StarOff, Trash2 } from "lucide-react";
+import { FolderInput, Pencil, Pin, PinOff, Star, StarOff, Trash2 } from "lucide-react";
 import { useState } from "react";
-import { toggleFavorite } from "@/actions/folders";
+
+import { toggleFavorite, togglePin } from "@/actions/folders";
 import { deleteNote } from "@/actions/notes";
 import { MoveDialog } from "@/components/move-dialog";
 import { RenameDialog } from "@/components/rename-dialog";
@@ -18,10 +18,12 @@ export function NoteTreeItem({
   node,
   isActive,
   children,
+  onRefresh,
 }: {
   node: TreeNode;
   isActive: boolean;
   children: React.ReactNode;
+  onRefresh?: () => void;
 }) {
   const [renameOpen, setRenameOpen] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
@@ -42,6 +44,7 @@ export function NoteTreeItem({
           <ContextMenuItem
             onClick={async () => {
               await toggleFavorite(node.id);
+              onRefresh?.();
             }}
           >
             {node.isFavorite ? (
@@ -56,11 +59,30 @@ export function NoteTreeItem({
               </>
             )}
           </ContextMenuItem>
+          <ContextMenuItem
+            onClick={async () => {
+              await togglePin(node.id);
+              onRefresh?.();
+            }}
+          >
+            {node.isPinned ? (
+              <>
+                <PinOff className="mr-2 h-4 w-4" />
+                Unpin
+              </>
+            ) : (
+              <>
+                <Pin className="mr-2 h-4 w-4" />
+                Pin to top
+              </>
+            )}
+          </ContextMenuItem>
           <ContextMenuSeparator />
           <ContextMenuItem
             className="text-destructive focus:text-destructive"
             onClick={async () => {
               await deleteNote(node.id);
+              onRefresh?.();
             }}
           >
             <Trash2 className="mr-2 h-4 w-4" />
@@ -73,12 +95,14 @@ export function NoteTreeItem({
         noteId={node.id}
         onOpenChange={setRenameOpen}
         open={renameOpen}
+        onSuccess={onRefresh}
       />
       <MoveDialog
         noteId={node.id}
         noteTitle={node.title}
         onOpenChange={setMoveOpen}
         open={moveOpen}
+        onSuccess={onRefresh}
       />
     </>
   );

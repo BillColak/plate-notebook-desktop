@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 
 import { renameNote } from "@/actions/folders";
@@ -17,11 +16,13 @@ export function RenameDialog({
   currentTitle,
   open,
   onOpenChange,
+  onSuccess,
 }: {
   noteId: string;
   currentTitle: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onSuccess?: () => void;
 }) {
   const [title, setTitle] = useState(currentTitle);
 
@@ -29,13 +30,11 @@ export function RenameDialog({
     e.preventDefault();
 
     const trimmed = title.trim();
-
-    if (!trimmed) {
-      return;
-    }
+    if (!trimmed) return;
 
     await renameNote(noteId, trimmed);
     onOpenChange(false);
+    onSuccess?.();
   };
 
   return (

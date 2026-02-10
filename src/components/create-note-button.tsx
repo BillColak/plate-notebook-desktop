@@ -1,4 +1,3 @@
-
 import { FileText, FolderPlus } from "lucide-react";
 
 import { createFolder } from "@/actions/folders";
@@ -14,8 +13,13 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
+import { refreshSidebar } from "@/lib/store";
 
-export function CreateNoteButton() {
+export function CreateNoteButton({
+  onNavigate,
+}: {
+  onNavigate?: (noteId: string) => void;
+}) {
   return (
     <SidebarMenu>
       <SidebarMenuItem>
@@ -36,8 +40,9 @@ export function CreateNoteButton() {
           >
             <DropdownMenuItem
               onClick={async () => {
-                await createNote();
-                // TODO: navigate to new note
+                const id = await createNote();
+                onNavigate?.(id);
+                refreshSidebar();
               }}
             >
               <FileText className="mr-2 h-4 w-4" />
@@ -46,6 +51,7 @@ export function CreateNoteButton() {
             <DropdownMenuItem
               onClick={async () => {
                 await createFolder("New Folder");
+                refreshSidebar();
               }}
             >
               <FolderPlus className="mr-2 h-4 w-4" />

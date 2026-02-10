@@ -38,6 +38,7 @@ impl Database {
                 parent_id TEXT,
                 is_folder INTEGER DEFAULT 0,
                 is_favorite INTEGER DEFAULT 0,
+                is_pinned INTEGER DEFAULT 0,
                 is_trashed INTEGER DEFAULT 0,
                 sort_order INTEGER DEFAULT 0,
                 created_at INTEGER DEFAULT (unixepoch()),
@@ -50,6 +51,7 @@ impl Database {
             CREATE INDEX IF NOT EXISTS idx_notes_favorite ON notes(is_favorite);
             CREATE INDEX IF NOT EXISTS idx_notes_trashed ON notes(is_trashed);
             CREATE INDEX IF NOT EXISTS idx_notes_updated ON notes(updated_at);
+            CREATE INDEX IF NOT EXISTS idx_notes_pinned ON notes(is_pinned);
 
             CREATE TABLE IF NOT EXISTS tags (
                 id TEXT PRIMARY KEY,
@@ -68,6 +70,16 @@ impl Database {
             );
 
             CREATE INDEX IF NOT EXISTS idx_note_tags_tag ON note_tags(tag_id);
+
+            -- Wikilinks table: tracks [[links]] between notes
+            CREATE TABLE IF NOT EXISTS wikilinks (
+                source_note_id TEXT NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
+                target_note_id TEXT NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
+                UNIQUE(source_note_id, target_note_id)
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_wikilinks_source ON wikilinks(source_note_id);
+            CREATE INDEX IF NOT EXISTS idx_wikilinks_target ON wikilinks(target_note_id);
 
             -- FTS5 virtual table for full-text search
             CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(
@@ -92,6 +104,10 @@ impl Database {
                 VALUES (new.rowid, new.title, new.plain_text);
             END;",
         )?;
+
+        // Add columns if they don't exist (migration for existing DBs)
+        let _ = conn.execute_batch("ALTER TABLE notes ADD COLUMN is_pinned INTEGER DEFAULT 0;");
+
         Ok(())
     }
 }

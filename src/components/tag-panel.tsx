@@ -1,30 +1,18 @@
-
 import { Hash, Plus, X } from "lucide-react";
 import { useEffect, useState, useTransition } from "react";
 
 import {
   addManualTag,
   getAllTags,
-  getTagsForNote,
-  removeManualTag,
+  getNoteTags,
+  removeTag,
 } from "@/actions/tags";
 import {
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
 } from "@/components/ui/sidebar";
-
-interface NoteTagInfo {
-  tagId: string;
-  tagName: string;
-  tagColor: string | null;
-  source: string | null;
-}
-
-interface TagInfo {
-  id: string;
-  name: string;
-}
+import type { NoteTagInfo, TagInfo } from "@/db/schema";
 
 export function TagPanel({ noteId }: { noteId: string }) {
   const [noteTags, setNoteTags] = useState<NoteTagInfo[]>([]);
@@ -34,20 +22,17 @@ export function TagPanel({ noteId }: { noteId: string }) {
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
-    getTagsForNote(noteId).then(setNoteTags);
+    getNoteTags(noteId).then(setNoteTags);
     getAllTags().then(setAllTags);
   }, [noteId]);
 
   const handleAddTag = (name: string) => {
     const trimmed = name.trim().toLowerCase();
-
-    if (!trimmed) {
-      return;
-    }
+    if (!trimmed) return;
 
     startTransition(async () => {
       await addManualTag(noteId, trimmed);
-      const updated = await getTagsForNote(noteId);
+      const updated = await getNoteTags(noteId);
       setNoteTags(updated);
       const updatedAll = await getAllTags();
       setAllTags(updatedAll);
@@ -58,8 +43,8 @@ export function TagPanel({ noteId }: { noteId: string }) {
 
   const handleRemoveTag = (tagId: string) => {
     startTransition(async () => {
-      await removeManualTag(noteId, tagId);
-      const updated = await getTagsForNote(noteId);
+      await removeTag(noteId, tagId);
+      const updated = await getNoteTags(noteId);
       setNoteTags(updated);
     });
   };
@@ -113,7 +98,6 @@ export function TagPanel({ noteId }: { noteId: string }) {
                   if (e.key === "Enter") {
                     handleAddTag(inputValue);
                   }
-
                   if (e.key === "Escape") {
                     setShowInput(false);
                     setInputValue("");

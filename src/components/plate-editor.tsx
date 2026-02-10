@@ -3,10 +3,13 @@ import { Plate, usePlateEditor } from "platejs/react";
 import { useCallback, useEffect, useRef, useTransition } from "react";
 
 import { createNote, saveNoteContent } from "@/actions/notes";
+import { syncInlineTags } from "@/actions/tags";
+import { syncWikilinks } from "@/actions/wikilinks";
 import { EditorKit } from "@/components/editor-kit";
 import { SettingsDialog } from "@/components/settings-dialog";
 import { Editor, EditorContainer } from "@/components/ui/editor";
-import { extractTitle } from "@/lib/extract";
+import { extractInlineTags, extractPlainText, extractTitle, extractWikilinks } from "@/lib/extract";
+import { refreshSidebar } from "@/lib/store";
 
 const DEBOUNCE_MS = 500;
 
@@ -14,12 +17,14 @@ interface PlateEditorProps {
   noteId: string;
   initialValue: TElement[];
   onNavigate?: (noteId: string) => void;
+  onWordCountChange?: (words: number, chars: number) => void;
 }
 
 export function PlateEditor({
   noteId,
   initialValue,
   onNavigate,
+  onWordCountChange,
 }: PlateEditorProps) {
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(null);
   const [isPending, startTransition] = useTransition();
@@ -31,12 +36,29 @@ export function PlateEditor({
       }
       debounceRef.current = setTimeout(() => {
         const title = extractTitle(value);
+        const plainText = extractPlainText(value);
+        const words = plainText
+          .split(/\s+/)
+          .filter((w) => w.length > 0).length;
+        const chars = plainText.length;
+
+        onWordCountChange?.(words, chars);
+
+        // Extract inline tags and wikilinks
+        const inlineTags = extractInlineTags(plainText);
+        const wikilinks = extractWikilinks(plainText);
+
         startTransition(async () => {
-          await saveNoteContent(noteId, value, title);
+          await saveNoteContent(noteId, value, title, plainText);
+          if (noteId !== "scratch") {
+            await syncInlineTags(noteId, inlineTags);
+            await syncWikilinks(noteId, wikilinks);
+          }
+          refreshSidebar();
         });
       }, DEBOUNCE_MS);
     },
-    [noteId]
+    [noteId, onWordCountChange]
   );
 
   // Cmd+N keyboard shortcut for new note
@@ -46,12 +68,12 @@ export function PlateEditor({
         e.preventDefault();
         createNote().then((id) => {
           onNavigate?.(id);
+          refreshSidebar();
         });
       }
     };
 
     document.addEventListener("keydown", down);
-
     return () => document.removeEventListener("keydown", down);
   }, [onNavigate]);
 
@@ -84,7 +106,7 @@ function PlateEditorInner({
         <Editor variant="demo" />
       </EditorContainer>
 
-      <div className="fixed right-4 bottom-4 z-50 rounded-md bg-background/80 px-2 py-1 text-muted-foreground text-xs backdrop-blur">
+      <div className="fixed right-4 bottom-14 z-50 rounded-md bg-background/80 px-2 py-1 text-muted-foreground text-xs backdrop-blur">
         {isPending ? "Saving..." : "Saved"}
       </div>
 
