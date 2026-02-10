@@ -2,9 +2,14 @@ import type { TElement } from "platejs";
 import { useCallback, useEffect, useState } from "react";
 
 import { getNote, getMostRecentNote } from "@/actions/notes";
+import { AnalyticsView } from "@/components/analytics-view";
 import { BreadcrumbNav } from "@/components/breadcrumb-nav";
+import { CalendarView } from "@/components/calendar-view";
+import { CanvasView } from "@/components/canvas-view";
+import { FlashcardView } from "@/components/flashcard-view";
 import { FocusModeOverlay } from "@/components/focus-mode";
 import { GraphView } from "@/components/graph-view";
+import { KanbanView } from "@/components/kanban-view";
 import { KeyboardShortcutsDialog } from "@/components/keyboard-shortcuts-dialog";
 import { OutlinePanel } from "@/components/outline-panel";
 import { PlateEditor } from "@/components/plate-editor";
@@ -12,6 +17,7 @@ import { Providers } from "@/components/providers";
 import { SearchDialog } from "@/components/search-dialog";
 import { SidebarLeft } from "@/components/sidebar-left";
 import { SidebarRight } from "@/components/sidebar-right";
+import { SnippetLibrary } from "@/components/snippet-library";
 import { SplitEditorContainer } from "@/components/split-editor";
 import { StatusBar } from "@/components/status-bar";
 import { TrashView } from "@/components/trash-view";
@@ -144,6 +150,18 @@ export default function App() {
               {view === "graph" && !focusMode && (
                 <GraphView onNavigate={handleNavigate} />
               )}
+              {view === "kanban" && !focusMode && (
+                <KanbanView onNavigate={handleNavigate} />
+              )}
+              {view === "flashcards" && !focusMode && <FlashcardView />}
+              {view === "calendar" && !focusMode && (
+                <CalendarView onNavigate={handleNavigate} />
+              )}
+              {view === "canvas" && !focusMode && (
+                <CanvasView onNavigate={handleNavigate} />
+              )}
+              {view === "snippets" && !focusMode && <SnippetLibrary />}
+              {view === "analytics" && !focusMode && <AnalyticsView />}
               {(view === "editor" || focusMode) && (
                 <SplitEditorContainer>
                   <PlateEditor

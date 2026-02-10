@@ -4,9 +4,11 @@ import type { NoteTreeItem } from "@/db/schema";
 
 // Simple global state store (no external deps needed)
 
+export type ViewType = "editor" | "trash" | "graph" | "kanban" | "flashcards" | "calendar" | "canvas" | "snippets" | "analytics";
+
 interface AppState {
   activeNoteId: string | null;
-  view: "editor" | "trash" | "graph";
+  view: ViewType;
   tree: NoteTreeItem[];
   favorites: { name: string; url: string; emoji: string }[];
   sidebarRefreshKey: number;
@@ -60,7 +62,7 @@ export function setActiveNote(noteId: string | null) {
   emit();
 }
 
-export function setView(view: AppState["view"]) {
+export function setView(view: ViewType) {
   state = { ...state, view };
   emit();
 }

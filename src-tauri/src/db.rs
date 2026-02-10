@@ -105,6 +105,62 @@ impl Database {
             END;",
         )?;
 
+        // New tables for flashcards, canvas, snippets, analytics
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS flashcards (
+                id TEXT PRIMARY KEY,
+                note_id TEXT NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
+                question TEXT NOT NULL,
+                answer TEXT NOT NULL,
+                next_review INTEGER DEFAULT (unixepoch()),
+                interval REAL DEFAULT 1.0,
+                ease_factor REAL DEFAULT 2.5,
+                repetitions INTEGER DEFAULT 0,
+                created_at INTEGER DEFAULT (unixepoch()),
+                updated_at INTEGER DEFAULT (unixepoch())
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_flashcards_note ON flashcards(note_id);
+            CREATE INDEX IF NOT EXISTS idx_flashcards_review ON flashcards(next_review);
+
+            CREATE TABLE IF NOT EXISTS canvas_items (
+                id TEXT PRIMARY KEY,
+                note_id TEXT REFERENCES notes(id) ON DELETE CASCADE,
+                x REAL DEFAULT 0.0,
+                y REAL DEFAULT 0.0,
+                width REAL DEFAULT 200.0,
+                height REAL DEFAULT 150.0,
+                created_at INTEGER DEFAULT (unixepoch())
+            );
+
+            CREATE TABLE IF NOT EXISTS canvas_connections (
+                id TEXT PRIMARY KEY,
+                from_item_id TEXT NOT NULL REFERENCES canvas_items(id) ON DELETE CASCADE,
+                to_item_id TEXT NOT NULL REFERENCES canvas_items(id) ON DELETE CASCADE,
+                created_at INTEGER DEFAULT (unixepoch())
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_canvas_conn_from ON canvas_connections(from_item_id);
+            CREATE INDEX IF NOT EXISTS idx_canvas_conn_to ON canvas_connections(to_item_id);
+
+            CREATE TABLE IF NOT EXISTS snippets (
+                id TEXT PRIMARY KEY,
+                title TEXT NOT NULL,
+                content TEXT NOT NULL,
+                language TEXT DEFAULT 'text',
+                tags TEXT DEFAULT '',
+                created_at INTEGER DEFAULT (unixepoch())
+            );
+
+            CREATE TABLE IF NOT EXISTS writing_stats (
+                date TEXT PRIMARY KEY,
+                words_written INTEGER DEFAULT 0,
+                notes_edited INTEGER DEFAULT 0,
+                time_spent_seconds INTEGER DEFAULT 0,
+                created_at INTEGER DEFAULT (unixepoch())
+            );",
+        )?;
+
         // Add columns if they don't exist (migration for existing DBs)
         let _ = conn.execute_batch("ALTER TABLE notes ADD COLUMN is_pinned INTEGER DEFAULT 0;");
 

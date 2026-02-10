@@ -1,8 +1,14 @@
 import {
+  BarChart3,
+  Brain,
   CalendarDays,
+  Code,
   Home,
+  Kanban,
+  LayoutDashboard,
   Network,
   Search,
+  Sparkles,
   Trash2,
 } from "lucide-react";
 
@@ -55,6 +61,42 @@ export function SidebarLeftClient({
       icon: Network,
       isActive: view === "graph",
     },
+    {
+      title: "Kanban",
+      url: "#kanban",
+      icon: Kanban,
+      isActive: view === "kanban",
+    },
+    {
+      title: "Flashcards",
+      url: "#flashcards",
+      icon: Brain,
+      isActive: view === "flashcards",
+    },
+    {
+      title: "Calendar",
+      url: "#calendar",
+      icon: LayoutDashboard,
+      isActive: view === "calendar",
+    },
+    {
+      title: "Canvas",
+      url: "#canvas",
+      icon: Sparkles,
+      isActive: view === "canvas",
+    },
+    {
+      title: "Snippets",
+      url: "#snippets",
+      icon: Code,
+      isActive: view === "snippets",
+    },
+    {
+      title: "Analytics",
+      url: "#analytics",
+      icon: BarChart3,
+      isActive: view === "analytics",
+    },
   ];
 
   const navSecondary = [
@@ -75,6 +117,18 @@ export function SidebarLeftClient({
       setView("trash");
     } else if (item.url === "#graph") {
       setView("graph");
+    } else if (item.url === "#kanban") {
+      setView("kanban");
+    } else if (item.url === "#flashcards") {
+      setView("flashcards");
+    } else if (item.url === "#calendar") {
+      setView("calendar");
+    } else if (item.url === "#canvas") {
+      setView("canvas");
+    } else if (item.url === "#snippets") {
+      setView("snippets");
+    } else if (item.url === "#analytics") {
+      setView("analytics");
     } else if (item.url === "#today") {
       const today = new Date().toISOString().split("T")[0];
       const id = await getOrCreateDailyNote(today!);

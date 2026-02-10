@@ -49,6 +49,26 @@ pub fn run() {
             commands::get_graph_data,
             commands::get_or_create_daily_note,
             commands::export_note_markdown,
+            // New feature commands
+            commands::find_related_notes,
+            commands::sync_flashcards,
+            commands::get_due_flashcards,
+            commands::review_flashcard,
+            commands::get_flashcard_stats,
+            commands::get_canvas_data,
+            commands::save_canvas_item,
+            commands::delete_canvas_item,
+            commands::save_canvas_connection,
+            commands::delete_canvas_connection,
+            commands::create_snippet,
+            commands::get_snippets,
+            commands::delete_snippet,
+            commands::search_snippets,
+            commands::record_writing_stat,
+            commands::get_writing_stats,
+            commands::get_notes_by_date_range,
+            commands::get_kanban_data,
+            commands::move_note_to_tag,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

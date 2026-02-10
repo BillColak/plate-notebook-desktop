@@ -2,6 +2,7 @@ import { Moon, Sun } from "lucide-react";
 
 import { BacklinksPanel } from "@/components/backlinks-panel";
 import { NoteMetadata } from "@/components/note-metadata";
+import { RelatedNotesPanel } from "@/components/related-notes";
 import { TagPanel } from "@/components/tag-panel";
 import {
   Sidebar,
@@ -60,6 +61,8 @@ export function SidebarRight({
               updatedAt={updatedAt ?? null}
               wordCount={wordCount ?? 0}
             />
+            <SidebarSeparator className="mx-0" />
+            <RelatedNotesPanel noteId={noteId} onNavigate={onNavigate} />
           </>
         )}
       </SidebarContent>

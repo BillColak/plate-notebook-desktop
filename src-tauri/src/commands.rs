@@ -979,6 +979,709 @@ pub fn get_or_create_daily_note(db: State<Database>, date: String) -> Result<Str
     Ok(id)
 }
 
+// ─── Related Notes (AI Suggestions) ─────────────────────
+
+#[derive(Debug, Serialize)]
+pub struct RelatedNoteItem {
+    pub id: String,
+    pub title: String,
+    pub emoji: Option<String>,
+    pub score: f64,
+}
+
+#[tauri::command]
+pub fn find_related_notes(
+    db: State<Database>,
+    note_id: String,
+) -> Result<Vec<RelatedNoteItem>, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+
+    // Get the plain text of the current note
+    let plain_text: String = conn
+        .query_row(
+            "SELECT COALESCE(plain_text, '') FROM notes WHERE id = ?1",
+            params![note_id],
+            |row| row.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+
+    if plain_text.trim().is_empty() {
+        return Ok(vec![]);
+    }
+
+    // Extract top keywords (words with 4+ chars, skip common words)
+    let stop_words: std::collections::HashSet<&str> = [
+        "the", "and", "for", "that", "this", "with", "from", "have", "been",
+        "will", "are", "was", "were", "not", "but", "can", "all", "has",
+        "each", "which", "their", "there", "about", "would", "make", "like",
+        "just", "over", "such", "take", "than", "them", "very", "some",
+        "into", "most", "other", "also", "more", "what", "when", "your",
+    ]
+    .iter()
+    .copied()
+    .collect();
+
+    let mut word_freq: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    for word in plain_text.to_lowercase().split_whitespace() {
+        let clean: String = word.chars().filter(|c| c.is_alphanumeric()).collect();
+        if clean.len() >= 4 && !stop_words.contains(clean.as_str()) {
+            *word_freq.entry(clean).or_insert(0) += 1;
+        }
+    }
+
+    let mut keywords: Vec<(String, usize)> = word_freq.into_iter().collect();
+    keywords.sort_by(|a, b| b.1.cmp(&a.1));
+    let top_keywords: Vec<String> = keywords.into_iter().take(8).map(|(w, _)| w).collect();
+
+    if top_keywords.is_empty() {
+        return Ok(vec![]);
+    }
+
+    // Search FTS for each keyword and score results
+    let mut note_scores: std::collections::HashMap<String, f64> = std::collections::HashMap::new();
+
+    for keyword in &top_keywords {
+        let fts_query = format!("\"{}\"", keyword);
+        let mut stmt = conn
+            .prepare(
+                "SELECT n.id FROM notes_fts
+                 JOIN notes n ON n.rowid = notes_fts.rowid
+                 WHERE notes_fts MATCH ?1 AND n.is_trashed = 0 AND n.id != ?2
+                 LIMIT 20",
+            )
+            .map_err(|e| e.to_string())?;
+
+        let ids: Vec<String> = stmt
+            .query_map(params![fts_query, note_id], |row| row.get(0))
+            .map_err(|e| e.to_string())?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        for id in ids {
+            *note_scores.entry(id).or_insert(0.0) += 1.0;
+        }
+    }
+
+    // Normalize scores
+    let max_score = top_keywords.len() as f64;
+    let mut results: Vec<RelatedNoteItem> = Vec::new();
+
+    let mut scored: Vec<(String, f64)> = note_scores.into_iter().collect();
+    scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+
+    for (nid, score) in scored.into_iter().take(5) {
+        let normalized = (score / max_score * 100.0).round();
+        match conn.query_row(
+            "SELECT title, emoji FROM notes WHERE id = ?1",
+            params![nid],
+            |row| Ok((row.get::<_, String>(0)?, row.get::<_, Option<String>>(1)?)),
+        ) {
+            Ok((title, emoji)) => {
+                results.push(RelatedNoteItem {
+                    id: nid,
+                    title,
+                    emoji,
+                    score: normalized,
+                });
+            }
+            Err(_) => continue,
+        }
+    }
+
+    Ok(results)
+}
+
+// ─── Flashcard Commands ──────────────────────────────────
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct FlashcardData {
+    pub id: String,
+    pub note_id: String,
+    pub question: String,
+    pub answer: String,
+    pub next_review: i64,
+    pub interval: f64,
+    pub ease_factor: f64,
+    pub repetitions: i64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct FlashcardStats {
+    pub due_today: i64,
+    pub total_cards: i64,
+    pub reviewed_today: i64,
+    pub streak: i64,
+}
+
+#[tauri::command]
+pub fn sync_flashcards(
+    db: State<Database>,
+    note_id: String,
+    cards: Vec<(String, String)>,
+) -> Result<(), String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+
+    // Remove old flashcards for this note
+    conn.execute("DELETE FROM flashcards WHERE note_id = ?1", params![note_id])
+        .map_err(|e| e.to_string())?;
+
+    // Insert new ones
+    for (question, answer) in &cards {
+        let id = Uuid::new_v4().to_string();
+        conn.execute(
+            "INSERT INTO flashcards (id, note_id, question, answer) VALUES (?1, ?2, ?3, ?4)",
+            params![id, note_id, question, answer],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_due_flashcards(db: State<Database>) -> Result<Vec<FlashcardData>, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+
+    let mut stmt = conn
+        .prepare(
+            "SELECT f.id, f.note_id, f.question, f.answer, f.next_review, f.interval, f.ease_factor, f.repetitions
+             FROM flashcards f
+             JOIN notes n ON n.id = f.note_id AND n.is_trashed = 0
+             WHERE f.next_review <= unixepoch()
+             ORDER BY f.next_review ASC
+             LIMIT 50",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let cards = stmt
+        .query_map([], |row| {
+            Ok(FlashcardData {
+                id: row.get(0)?,
+                note_id: row.get(1)?,
+                question: row.get(2)?,
+                answer: row.get(3)?,
+                next_review: row.get(4)?,
+                interval: row.get(5)?,
+                ease_factor: row.get(6)?,
+                repetitions: row.get(7)?,
+            })
+        })
+        .map_err(|e| e.to_string())?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    Ok(cards)
+}
+
+#[tauri::command]
+pub fn review_flashcard(
+    db: State<Database>,
+    card_id: String,
+    rating: i32,
+) -> Result<(), String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+
+    // Get current card state
+    let (interval, ease_factor, repetitions): (f64, f64, i64) = conn
+        .query_row(
+            "SELECT interval, ease_factor, repetitions FROM flashcards WHERE id = ?1",
+            params![card_id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .map_err(|e| e.to_string())?;
+
+    // SM-2 algorithm
+    let (new_interval, new_ef, new_reps) = if rating < 2 {
+        // Failed: reset
+        (1.0_f64, (ease_factor - 0.2_f64).max(1.3_f64), 0_i64)
+    } else {
+        let new_ef = (ease_factor + 0.1 - (4 - rating) as f64 * (0.08 + (4 - rating) as f64 * 0.02)).max(1.3);
+        let new_reps = repetitions + 1;
+        let new_interval = match new_reps {
+            1 => 1.0,
+            2 => 6.0,
+            _ => interval * new_ef,
+        };
+        (new_interval, new_ef, new_reps)
+    };
+
+    let next_review_delta = (new_interval * 86400.0) as i64; // days to seconds
+
+    conn.execute(
+        "UPDATE flashcards SET interval = ?1, ease_factor = ?2, repetitions = ?3, next_review = unixepoch() + ?4, updated_at = unixepoch() WHERE id = ?5",
+        params![new_interval, new_ef, new_reps, next_review_delta, card_id],
+    )
+    .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_flashcard_stats(db: State<Database>) -> Result<FlashcardStats, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+
+    let due_today: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM flashcards f JOIN notes n ON n.id = f.note_id AND n.is_trashed = 0 WHERE f.next_review <= unixepoch()",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+
+    let total_cards: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM flashcards f JOIN notes n ON n.id = f.note_id AND n.is_trashed = 0",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+
+    // Reviewed today: cards whose updated_at is today
+    let reviewed_today: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM flashcards WHERE updated_at >= unixepoch('now', 'start of day')",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+
+    // Streak: consecutive days with reviews
+    let streak: i64 = conn
+        .query_row(
+            "SELECT COUNT(DISTINCT date(updated_at, 'unixepoch')) FROM flashcards WHERE updated_at >= unixepoch() - 86400 * 30",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+
+    Ok(FlashcardStats {
+        due_today,
+        total_cards,
+        reviewed_today,
+        streak,
+    })
+}
+
+// ─── Canvas Commands ─────────────────────────────────────
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CanvasItem {
+    pub id: String,
+    pub note_id: Option<String>,
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CanvasConnection {
+    pub id: String,
+    pub from_item_id: String,
+    pub to_item_id: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct CanvasData {
+    pub items: Vec<CanvasItem>,
+    pub connections: Vec<CanvasConnection>,
+}
+
+#[tauri::command]
+pub fn get_canvas_data(db: State<Database>) -> Result<CanvasData, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+
+    let mut item_stmt = conn
+        .prepare("SELECT id, note_id, x, y, width, height FROM canvas_items")
+        .map_err(|e| e.to_string())?;
+
+    let items = item_stmt
+        .query_map([], |row| {
+            Ok(CanvasItem {
+                id: row.get(0)?,
+                note_id: row.get(1)?,
+                x: row.get(2)?,
+                y: row.get(3)?,
+                width: row.get(4)?,
+                height: row.get(5)?,
+            })
+        })
+        .map_err(|e| e.to_string())?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    let mut conn_stmt = conn
+        .prepare("SELECT id, from_item_id, to_item_id FROM canvas_connections")
+        .map_err(|e| e.to_string())?;
+
+    let connections = conn_stmt
+        .query_map([], |row| {
+            Ok(CanvasConnection {
+                id: row.get(0)?,
+                from_item_id: row.get(1)?,
+                to_item_id: row.get(2)?,
+            })
+        })
+        .map_err(|e| e.to_string())?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    Ok(CanvasData { items, connections })
+}
+
+#[tauri::command]
+pub fn save_canvas_item(
+    db: State<Database>,
+    id: String,
+    note_id: Option<String>,
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+) -> Result<(), String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+
+    conn.execute(
+        "INSERT OR REPLACE INTO canvas_items (id, note_id, x, y, width, height) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        params![id, note_id, x, y, width, height],
+    )
+    .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn delete_canvas_item(db: State<Database>, id: String) -> Result<(), String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM canvas_connections WHERE from_item_id = ?1 OR to_item_id = ?1", params![id])
+        .map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM canvas_items WHERE id = ?1", params![id])
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn save_canvas_connection(
+    db: State<Database>,
+    id: String,
+    from_item_id: String,
+    to_item_id: String,
+) -> Result<(), String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    conn.execute(
+        "INSERT OR REPLACE INTO canvas_connections (id, from_item_id, to_item_id) VALUES (?1, ?2, ?3)",
+        params![id, from_item_id, to_item_id],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn delete_canvas_connection(db: State<Database>, id: String) -> Result<(), String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM canvas_connections WHERE id = ?1", params![id])
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+// ─── Snippet Commands ────────────────────────────────────
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SnippetData {
+    pub id: String,
+    pub title: String,
+    pub content: String,
+    pub language: String,
+    pub tags: String,
+    #[serde(rename = "createdAt")]
+    pub created_at: i64,
+}
+
+#[tauri::command]
+pub fn create_snippet(
+    db: State<Database>,
+    title: String,
+    content: String,
+    language: String,
+    tags: String,
+) -> Result<String, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let id = Uuid::new_v4().to_string();
+    conn.execute(
+        "INSERT INTO snippets (id, title, content, language, tags) VALUES (?1, ?2, ?3, ?4, ?5)",
+        params![id, title, content, language, tags],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(id)
+}
+
+#[tauri::command]
+pub fn get_snippets(db: State<Database>) -> Result<Vec<SnippetData>, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let mut stmt = conn
+        .prepare("SELECT id, title, content, language, tags, created_at FROM snippets ORDER BY created_at DESC")
+        .map_err(|e| e.to_string())?;
+
+    let snippets = stmt
+        .query_map([], |row| {
+            Ok(SnippetData {
+                id: row.get(0)?,
+                title: row.get(1)?,
+                content: row.get(2)?,
+                language: row.get(3)?,
+                tags: row.get(4)?,
+                created_at: row.get(5)?,
+            })
+        })
+        .map_err(|e| e.to_string())?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    Ok(snippets)
+}
+
+#[tauri::command]
+pub fn delete_snippet(db: State<Database>, id: String) -> Result<(), String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM snippets WHERE id = ?1", params![id])
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn search_snippets(db: State<Database>, query: String) -> Result<Vec<SnippetData>, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let pattern = format!("%{}%", query);
+    let mut stmt = conn
+        .prepare("SELECT id, title, content, language, tags, created_at FROM snippets WHERE title LIKE ?1 OR content LIKE ?1 OR tags LIKE ?1 ORDER BY created_at DESC")
+        .map_err(|e| e.to_string())?;
+
+    let snippets = stmt
+        .query_map(params![pattern], |row| {
+            Ok(SnippetData {
+                id: row.get(0)?,
+                title: row.get(1)?,
+                content: row.get(2)?,
+                language: row.get(3)?,
+                tags: row.get(4)?,
+                created_at: row.get(5)?,
+            })
+        })
+        .map_err(|e| e.to_string())?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    Ok(snippets)
+}
+
+// ─── Writing Stats Commands ──────────────────────────────
+
+#[derive(Debug, Serialize)]
+pub struct WritingStat {
+    pub date: String,
+    pub words_written: i64,
+    pub notes_edited: i64,
+    pub time_spent_seconds: i64,
+}
+
+#[tauri::command]
+pub fn record_writing_stat(
+    db: State<Database>,
+    words_written: i64,
+    notes_edited: i64,
+) -> Result<(), String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+
+    conn.execute(
+        "INSERT INTO writing_stats (date, words_written, notes_edited)
+         VALUES (date('now'), ?1, ?2)
+         ON CONFLICT(date) DO UPDATE SET
+           words_written = writing_stats.words_written + excluded.words_written,
+           notes_edited = writing_stats.notes_edited + excluded.notes_edited",
+        params![words_written, notes_edited],
+    )
+    .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_writing_stats(db: State<Database>, days: i64) -> Result<Vec<WritingStat>, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+
+    let mut stmt = conn
+        .prepare(
+            "SELECT date, words_written, notes_edited, time_spent_seconds
+             FROM writing_stats
+             WHERE date >= date('now', ?1)
+             ORDER BY date ASC",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let modifier = format!("-{} days", days);
+    let stats = stmt
+        .query_map(params![modifier], |row| {
+            Ok(WritingStat {
+                date: row.get(0)?,
+                words_written: row.get(1)?,
+                notes_edited: row.get(2)?,
+                time_spent_seconds: row.get(3)?,
+            })
+        })
+        .map_err(|e| e.to_string())?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    Ok(stats)
+}
+
+// ─── Notes by Date (Calendar) ────────────────────────────
+
+#[derive(Debug, Serialize)]
+pub struct NotesByDateItem {
+    pub id: String,
+    pub title: String,
+    pub emoji: Option<String>,
+    #[serde(rename = "createdAt")]
+    pub created_at: i64,
+    #[serde(rename = "updatedAt")]
+    pub updated_at: i64,
+}
+
+#[tauri::command]
+pub fn get_notes_by_date_range(
+    db: State<Database>,
+    start_ts: i64,
+    end_ts: i64,
+) -> Result<Vec<NotesByDateItem>, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, title, emoji, created_at, updated_at FROM notes
+             WHERE is_trashed = 0 AND is_folder = 0
+             AND (created_at BETWEEN ?1 AND ?2 OR updated_at BETWEEN ?1 AND ?2)
+             ORDER BY updated_at DESC",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let notes = stmt
+        .query_map(params![start_ts, end_ts], |row| {
+            Ok(NotesByDateItem {
+                id: row.get(0)?,
+                title: row.get(1)?,
+                emoji: row.get(2)?,
+                created_at: row.get(3)?,
+                updated_at: row.get(4)?,
+            })
+        })
+        .map_err(|e| e.to_string())?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    Ok(notes)
+}
+
+// ─── Kanban: notes by tag ────────────────────────────────
+
+#[derive(Debug, Serialize)]
+pub struct KanbanCard {
+    pub id: String,
+    pub title: String,
+    pub emoji: Option<String>,
+    pub preview: String,
+    #[serde(rename = "updatedAt")]
+    pub updated_at: i64,
+    pub tags: Vec<String>,
+}
+
+#[tauri::command]
+pub fn get_kanban_data(db: State<Database>) -> Result<Vec<KanbanCard>, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+
+    // Get all non-trashed, non-folder notes that have tags
+    let mut stmt = conn
+        .prepare(
+            "SELECT DISTINCT n.id, n.title, n.emoji, SUBSTR(COALESCE(n.plain_text, ''), 1, 100), COALESCE(n.updated_at, 0)
+             FROM notes n
+             JOIN note_tags nt ON nt.note_id = n.id
+             WHERE n.is_trashed = 0 AND n.is_folder = 0
+             ORDER BY n.updated_at DESC",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let mut cards: Vec<KanbanCard> = stmt
+        .query_map([], |row| {
+            Ok(KanbanCard {
+                id: row.get(0)?,
+                title: row.get(1)?,
+                emoji: row.get(2)?,
+                preview: row.get(3)?,
+                updated_at: row.get(4)?,
+                tags: vec![],
+            })
+        })
+        .map_err(|e| e.to_string())?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    // Fill in tags for each card
+    for card in &mut cards {
+        let mut tag_stmt = conn
+            .prepare("SELECT t.name FROM note_tags nt JOIN tags t ON t.id = nt.tag_id WHERE nt.note_id = ?1")
+            .map_err(|e| e.to_string())?;
+        card.tags = tag_stmt
+            .query_map(params![card.id], |row| row.get(0))
+            .map_err(|e| e.to_string())?
+            .filter_map(|r| r.ok())
+            .collect();
+    }
+
+    Ok(cards)
+}
+
+#[tauri::command]
+pub fn move_note_to_tag(
+    db: State<Database>,
+    note_id: String,
+    from_tag: String,
+    to_tag: String,
+) -> Result<(), String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+
+    // Remove old tag
+    let from_tag_id: Option<String> = conn
+        .query_row("SELECT id FROM tags WHERE name = ?1", params![from_tag], |row| row.get(0))
+        .ok();
+    if let Some(tid) = from_tag_id {
+        conn.execute(
+            "DELETE FROM note_tags WHERE note_id = ?1 AND tag_id = ?2",
+            params![note_id, tid],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+
+    // Add new tag
+    let new_tag_id = Uuid::new_v4().to_string();
+    conn.execute(
+        "INSERT OR IGNORE INTO tags (id, name) VALUES (?1, ?2)",
+        params![new_tag_id, to_tag],
+    )
+    .map_err(|e| e.to_string())?;
+
+    let actual_id: String = conn
+        .query_row("SELECT id FROM tags WHERE name = ?1", params![to_tag], |row| row.get(0))
+        .map_err(|e| e.to_string())?;
+
+    conn.execute(
+        "INSERT OR IGNORE INTO note_tags (note_id, tag_id, source) VALUES (?1, ?2, 'manual')",
+        params![note_id, actual_id],
+    )
+    .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
 // ─── Export Command ──────────────────────────────────────
 
 #[tauri::command]

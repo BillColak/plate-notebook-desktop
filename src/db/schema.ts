@@ -97,3 +97,95 @@ export interface FavoriteNote {
   title: string;
   emoji: string | null;
 }
+
+// ─── Related Notes ───────────────────────────────────────
+
+export interface RelatedNoteItem {
+  id: string;
+  title: string;
+  emoji: string | null;
+  score: number;
+}
+
+// ─── Flashcards ──────────────────────────────────────────
+
+export interface FlashcardData {
+  id: string;
+  note_id: string;
+  question: string;
+  answer: string;
+  next_review: number;
+  interval: number;
+  ease_factor: number;
+  repetitions: number;
+}
+
+export interface FlashcardStats {
+  due_today: number;
+  total_cards: number;
+  reviewed_today: number;
+  streak: number;
+}
+
+// ─── Canvas ──────────────────────────────────────────────
+
+export interface CanvasItem {
+  id: string;
+  note_id: string | null;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface CanvasConnection {
+  id: string;
+  from_item_id: string;
+  to_item_id: string;
+}
+
+export interface CanvasData {
+  items: CanvasItem[];
+  connections: CanvasConnection[];
+}
+
+// ─── Snippets ────────────────────────────────────────────
+
+export interface SnippetData {
+  id: string;
+  title: string;
+  content: string;
+  language: string;
+  tags: string;
+  createdAt: number;
+}
+
+// ─── Writing Stats ───────────────────────────────────────
+
+export interface WritingStat {
+  date: string;
+  words_written: number;
+  notes_edited: number;
+  time_spent_seconds: number;
+}
+
+// ─── Calendar ────────────────────────────────────────────
+
+export interface NotesByDateItem {
+  id: string;
+  title: string;
+  emoji: string | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+// ─── Kanban ──────────────────────────────────────────────
+
+export interface KanbanCard {
+  id: string;
+  title: string;
+  emoji: string | null;
+  preview: string;
+  updatedAt: number;
+  tags: string[];
+}
