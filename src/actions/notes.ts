@@ -16,6 +16,23 @@ export async function createNote(parentId?: string | null): Promise<string> {
   }
 }
 
+export async function createNoteFromTemplate(
+  title: string,
+  emoji: string,
+  content: string
+): Promise<string> {
+  try {
+    return await invoke<string>("create_note_from_template", {
+      title,
+      emoji,
+      content,
+    });
+  } catch {
+    console.warn("[dev] createNoteFromTemplate fallback");
+    return `mock-template-${Date.now()}`;
+  }
+}
+
 export async function getNote(noteId: string): Promise<Note | null> {
   try {
     return await invoke<Note>("get_note", { noteId });

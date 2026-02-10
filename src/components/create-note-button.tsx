@@ -1,11 +1,15 @@
-import { FileText, FolderPlus } from "lucide-react";
+import { FileText, FolderPlus, LayoutTemplate } from "lucide-react";
 
 import { createFolder } from "@/actions/folders";
-import { createNote } from "@/actions/notes";
+import { createNoteFromTemplate } from "@/actions/notes";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -13,7 +17,9 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
+import { templates } from "@/lib/templates";
 import { refreshSidebar } from "@/lib/store";
+import { createNote } from "@/actions/notes";
 
 export function CreateNoteButton({
   onNavigate,
@@ -57,6 +63,37 @@ export function CreateNoteButton({
               <FolderPlus className="mr-2 h-4 w-4" />
               New Folder
             </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <LayoutTemplate className="mr-2 h-4 w-4" />
+                From Template...
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="w-56">
+                {templates.map((template) => (
+                  <DropdownMenuItem
+                    key={template.id}
+                    onClick={async () => {
+                      const id = await createNoteFromTemplate(
+                        template.name,
+                        template.emoji,
+                        JSON.stringify(template.content())
+                      );
+                      onNavigate?.(id);
+                      refreshSidebar();
+                    }}
+                  >
+                    <span className="mr-2">{template.emoji}</span>
+                    <div className="flex flex-col">
+                      <span className="text-sm">{template.name}</span>
+                      <span className="text-muted-foreground text-xs">
+                        {template.description}
+                      </span>
+                    </div>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
           </DropdownMenuContent>
         </DropdownMenu>
       </SidebarMenuItem>

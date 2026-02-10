@@ -18,6 +18,7 @@ interface PlateEditorProps {
   initialValue: TElement[];
   onNavigate?: (noteId: string) => void;
   onWordCountChange?: (words: number, chars: number) => void;
+  onEditorValueChange?: (value: TElement[]) => void;
 }
 
 export function PlateEditor({
@@ -25,12 +26,16 @@ export function PlateEditor({
   initialValue,
   onNavigate,
   onWordCountChange,
+  onEditorValueChange,
 }: PlateEditorProps) {
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(null);
   const [isPending, startTransition] = useTransition();
 
   const handleChange = useCallback(
     ({ value }: { value: TElement[] }) => {
+      // Pass the current value up for outline panel etc.
+      onEditorValueChange?.(value);
+
       if (debounceRef.current) {
         clearTimeout(debounceRef.current);
       }
@@ -58,7 +63,7 @@ export function PlateEditor({
         });
       }, DEBOUNCE_MS);
     },
-    [noteId, onWordCountChange]
+    [noteId, onWordCountChange, onEditorValueChange]
   );
 
   // Cmd+N keyboard shortcut for new note

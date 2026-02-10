@@ -1,4 +1,14 @@
-import { FolderInput, Pencil, Pin, PinOff, Star, StarOff, Trash2 } from "lucide-react";
+import {
+  Bookmark,
+  Columns2,
+  FolderInput,
+  Pencil,
+  Pin,
+  PinOff,
+  Star,
+  StarOff,
+  Trash2,
+} from "lucide-react";
 import { useState } from "react";
 
 import { toggleFavorite, togglePin } from "@/actions/folders";
@@ -10,9 +20,13 @@ import {
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import type { TreeNode } from "@/lib/tree";
+import { setSplitNote, setBookmark, useAppStore } from "@/lib/store";
 
 export function NoteTreeItem({
   node,
@@ -27,12 +41,18 @@ export function NoteTreeItem({
 }) {
   const [renameOpen, setRenameOpen] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
+  const { bookmarks } = useAppStore();
+
+  // Find if this note is bookmarked already
+  const bookmarkSlot = Object.entries(bookmarks).find(
+    ([, noteId]) => noteId === node.id
+  )?.[0];
 
   return (
     <>
       <ContextMenu>
         <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
-        <ContextMenuContent className="w-48">
+        <ContextMenuContent className="w-52">
           <ContextMenuItem onClick={() => setRenameOpen(true)}>
             <Pencil className="mr-2 h-4 w-4" />
             Rename
@@ -41,6 +61,12 @@ export function NoteTreeItem({
             <FolderInput className="mr-2 h-4 w-4" />
             Move to folder
           </ContextMenuItem>
+          {!node.isFolder && (
+            <ContextMenuItem onClick={() => setSplitNote(node.id)}>
+              <Columns2 className="mr-2 h-4 w-4" />
+              Open in Split
+            </ContextMenuItem>
+          )}
           <ContextMenuItem
             onClick={async () => {
               await toggleFavorite(node.id);
@@ -77,6 +103,28 @@ export function NoteTreeItem({
               </>
             )}
           </ContextMenuItem>
+          {!node.isFolder && (
+            <ContextMenuSub>
+              <ContextMenuSubTrigger>
+                <Bookmark className="mr-2 h-4 w-4" />
+                Set as Bookmark
+              </ContextMenuSubTrigger>
+              <ContextMenuSubContent className="w-36">
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((slot) => (
+                  <ContextMenuItem
+                    key={slot}
+                    onClick={() => setBookmark(slot, node.id)}
+                  >
+                    <span className="mr-2 font-mono text-xs">⌘{slot}</span>
+                    Bookmark {slot}
+                    {bookmarks[slot] === node.id && (
+                      <span className="ml-auto text-primary">✓</span>
+                    )}
+                  </ContextMenuItem>
+                ))}
+              </ContextMenuSubContent>
+            </ContextMenuSub>
+          )}
           <ContextMenuSeparator />
           <ContextMenuItem
             className="text-destructive focus:text-destructive"

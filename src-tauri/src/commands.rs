@@ -431,6 +431,55 @@ pub fn get_recent_notes(db: State<Database>, limit: Option<i64>) -> Result<Vec<R
     Ok(notes)
 }
 
+// ─── Template Command ────────────────────────────────────
+
+#[tauri::command]
+pub fn create_note_from_template(
+    db: State<Database>,
+    title: String,
+    emoji: String,
+    content: String,
+) -> Result<String, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let id = Uuid::new_v4().to_string();
+
+    // Extract plain text for FTS
+    let plain_text = extract_plain_text_from_json(&content);
+    let word_count = plain_text.split_whitespace().count() as i64;
+
+    conn.execute(
+        "INSERT INTO notes (id, title, content, emoji, plain_text, word_count) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        params![id, title, content, emoji, plain_text, word_count],
+    )
+    .map_err(|e| e.to_string())?;
+
+    Ok(id)
+}
+
+/// Simple JSON-based plain text extraction for templates
+fn extract_plain_text_from_json(content: &str) -> String {
+    // Parse the JSON content and extract text nodes
+    if let Ok(nodes) = serde_json::from_str::<Vec<serde_json::Value>>(content) {
+        let mut parts = Vec::new();
+        fn walk(node: &serde_json::Value, parts: &mut Vec<String>) {
+            if let Some(text) = node.get("text").and_then(|t| t.as_str()) {
+                parts.push(text.to_string());
+            }
+            if let Some(children) = node.get("children").and_then(|c| c.as_array()) {
+                for child in children {
+                    walk(child, parts);
+                }
+            }
+        }
+        for node in &nodes {
+            walk(node, &mut parts);
+        }
+        parts.join(" ").trim().to_string()
+    } else {
+        String::new()
+    }
+}
+
 // ─── Folder Commands ─────────────────────────────────────
 
 #[tauri::command]

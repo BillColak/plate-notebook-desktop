@@ -8,8 +8,12 @@ import {
 } from "@/components/ui/dialog";
 
 const shortcuts = [
-  { keys: ["⌘", "K"], description: "Search notes" },
+  { keys: ["⌘", "K"], description: "Command palette / Search" },
   { keys: ["⌘", "N"], description: "New note" },
+  { keys: ["⌘", "Shift", "F"], description: "Toggle Focus Mode" },
+  { keys: ["⌘", "Shift", "O"], description: "Toggle Outline" },
+  { keys: ["⌘", "1-9"], description: "Jump to bookmark" },
+  { keys: ["Esc"], description: "Exit Focus Mode" },
   { keys: ["⌘", "B"], description: "Bold" },
   { keys: ["⌘", "I"], description: "Italic" },
   { keys: ["⌘", "U"], description: "Underline" },

@@ -20,6 +20,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::execute_sql,
             commands::create_note,
+            commands::create_note_from_template,
             commands::get_note,
             commands::save_note_content,
             commands::get_notes_tree,
